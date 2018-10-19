@@ -130,6 +130,11 @@
 \def\begincol{\begin{column}}
 \def\endcol{\end{column}}
 \def\endcols{\end{columns}}
+
+\setlength{\OuterFrameSep}{-.5pt}
+\makeatletter
+\preto{\@verbatim}{\topsep=-10pt \partopsep=-10pt }
+\makeatother
 %END OF PREAMBLE
 
 

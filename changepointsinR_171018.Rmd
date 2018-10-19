@@ -1,0 +1,716 @@
+---
+title: "Changepoint Analysis Using R"
+author: "Robert Maidstone"
+date: "17 October, 2018"
+output:
+  beamer_presentation:
+      includes:
+        in_header: ~/changepointsinR/header-beamer.tex
+---
+
+
+
+## What are Changepoints?
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning=FALSE,message=FALSE)
+library(tidyverse)
+library(patchwork)
+library(qpcR)
+library(changepoint)
+library(prophet)
+```
+
+
+ \includegraphics[width = 10cm,clip]{def.jpg} 
+
+
+## Change in mean
+
+\begincols
+  \begincol{.6\textwidth}
+<!-- \footnotesize -->
+\scriptsize
+```{r,echo=TRUE}
+set.seed(14)
+m<-5
+n<-1000
+true_cps <- c(0,sort(sample(1:(n-1),m)),n)
+means <- rnorm(m+1,0,4)
+y<-c()
+for(i in 1:(m+1)){
+  j <- (true_cps[i]+1):true_cps[i+1]
+  y[j]<-rnorm(length(j),means[i],1)
+}
+
+```
+  \endcol
+\begincol{.4\textwidth}
+```{r pressure, fig.height=4,fig.width=3}
+ggplot(data.frame(x=1:n,y=y),aes(x=x,y=y)) + geom_point(size=.5) + 
+ # geom_vline(data=data.frame(CP=true_cps),aes(xintercept=CP),colour="red",linetype="dashed") +
+  theme_bw()
+```
+  \endcol
+\endcols
+
+
+## Change in mean
+
+\begincols
+  \begincol{.6\textwidth}
+<!-- \footnotesize -->
+\scriptsize
+```{r,echo=TRUE}
+set.seed(14)
+m<-5
+n<-1000
+true_cps <- c(0,sort(sample(1:(n-1),m)),n)
+means <- rnorm(m+1,0,4)
+y<-c()
+for(i in 1:(m+1)){
+  j <- (true_cps[i]+1):true_cps[i+1]
+  y[j]<-rnorm(length(j),means[i],1)
+}
+
+```
+
+```{r}
+y_mean<-y
+tru_cps_mean <- true_cps
+```
+
+  \endcol
+\begincol{.4\textwidth}
+```{r, fig.height=4,fig.width=3}
+ggplot(data.frame(x=1:n,y=y),aes(x=x,y=y)) + geom_point(size=.5) + 
+  geom_vline(data=data.frame(CP=true_cps),aes(xintercept=CP),colour="red",linetype="dashed") +
+  theme_bw()
+```
+  \endcol
+\endcols
+
+## Change in variance
+
+\begincols
+  \begincol{.6\textwidth}
+<!-- \footnotesize -->
+\scriptsize
+```{r,echo=TRUE}
+set.seed(12)
+m<-5
+n<-1000
+true_cps <- c(0,sort(sample(1:(n-1),m)),n)
+sd <- runif(m+1,1,20)
+y<-c()
+for(i in 1:(m+1)){
+  j <- (true_cps[i]+1):true_cps[i+1]
+  y[j]<-rnorm(length(j),0,sd[i])
+}
+
+```
+  \endcol
+\begincol{.4\textwidth}
+```{r, fig.height=4,fig.width=3}
+ggplot(data.frame(x=1:n,y=y),aes(x=x,y=y)) + geom_point(size=.5) +
+  #geom_vline(data=data.frame(CP=true_cps),aes(xintercept=CP),colour="red",linetype="dashed") +
+  theme_bw()
+```
+  \endcol
+\endcols
+
+```{r}
+y_var<-y
+tru_cps_var <- true_cps
+```
+
+## Change in variance
+
+\begincols
+  \begincol{.6\textwidth}
+<!-- \footnotesize -->
+\scriptsize
+```{r,echo=TRUE}
+set.seed(12)
+m<-5
+n<-1000
+true_cps <- c(0,sort(sample(1:(n-1),m)),n)
+sd <- runif(m+1,1,20)
+y<-c()
+for(i in 1:(m+1)){
+  j <- (true_cps[i]+1):true_cps[i+1]
+  y[j]<-rnorm(length(j),0,sd[i])
+}
+
+```
+  \endcol
+\begincol{.4\textwidth}
+```{r, fig.height=4,fig.width=3}
+ggplot(data.frame(x=1:n,y=y),aes(x=x,y=y)) + geom_point(size=.5) +
+  geom_vline(data=data.frame(CP=true_cps),aes(xintercept=CP),colour="red",linetype="dashed") +
+  theme_bw()
+```
+  \endcol
+\endcols
+
+## Change in trend
+
+\begincols
+  \begincol{.6\textwidth}
+<!-- \footnotesize -->
+\scriptsize
+```{r,echo=TRUE}
+set.seed(110)
+m<-3
+n<-1000
+true_cps <- c(0,sort(sample(1:(n-1),m)),n)
+slope <- rnorm(m+1,0,.01)
+intercept <- rnorm(1,0,1)
+y<-c()
+for(i in 1:(m+1)){
+  j <- (true_cps[i]+1):true_cps[i+1]
+  if(i==1){
+  for(jind in j){
+    y[jind]<-intercept+(jind-true_cps[i])*
+      slope[i] + rnorm(1,0,1)
+  }
+  }else{
+    for(jind in j){
+      y[jind]<-y[j[1]-1]+(jind-true_cps[i])*
+        slope[i] + rnorm(1,0,1)
+    }
+  }
+}
+
+```
+  \endcol
+\begincol{.4\textwidth}
+```{r, fig.height=4,fig.width=3}
+ggplot(data.frame(x=1:n,y=y),aes(x=x,y=y)) + geom_point(size=.5) +
+  #geom_vline(data=data.frame(CP=true_cps),aes(xintercept=CP),colour="red",linetype="dashed") +
+  theme_bw()
+```
+  \endcol
+\endcols
+
+```{r}
+y_trend<-y
+tru_cps_trend <- true_cps
+```
+
+## Change in trend
+
+\begincols
+  \begincol{.6\textwidth}
+<!-- \footnotesize -->
+\scriptsize
+```{r,echo=TRUE}
+set.seed(110)
+m<-3
+n<-1000
+true_cps <- c(0,sort(sample(1:(n-1),m)),n)
+slope <- rnorm(m+1,0,.01)
+intercept <- rnorm(1,0,1)
+y<-c()
+for(i in 1:(m+1)){
+  j <- (true_cps[i]+1):true_cps[i+1]
+  if(i==1){
+  for(jind in j){
+    y[jind]<-intercept+(jind-true_cps[i])*
+      slope[i] + rnorm(1,0,1)
+  }
+  }else{
+    for(jind in j){
+      y[jind]<-y[j[1]-1]+(jind-true_cps[i])*
+        slope[i] + rnorm(1,0,1)
+    }
+  }
+}
+
+```
+  \endcol
+\begincol{.4\textwidth}
+```{r, fig.height=4,fig.width=3}
+ggplot(data.frame(x=1:n,y=y),aes(x=x,y=y)) + geom_point(size=.5) +
+  geom_vline(data=data.frame(CP=true_cps),aes(xintercept=CP),colour="red",linetype="dashed") +
+  theme_bw()
+```
+  \endcol
+\endcols
+
+## Real World Examples
+
+\begincols
+  \begincol{.4\textwidth}
+    \includegraphics[width = 5cm,clip]{copynumber.png} \
+    \scriptsize (a) Copy number at genomic positions in a human breast tumor sample (Chen & Wang, 2009). 
+  \endcol
+  \begincol{.4\textwidth}
+       \includegraphics[width = 5cm,clip]{BFM.png} \
+  \scriptsize (b) Rotation of a bacterial flagella motor (Maidstone, 2016).
+  \endcol
+\endcols
+
+## Many changepoint methods
+
+Many different changepoint algorithms exist
+\begincols
+  \begincol{.4\textwidth}
+  
+  - Exhaustive Search
+  - Optimal Partitioning
+  - PELT
+  - FPOP (and R-FPOP)
+  - CROPS
+  - Segment Neighbourhood Search
+  - pDPA
+  - SNIP
+  
+\endcol
+\begincol{.4\textwidth}
+
+  - Binary Segmentation
+  - WBS
+  - CBS
+  - SMUCE
+  - SMOP
+  - ED-PELT
+  - E-Divisive
+  - ECP
+  
+\endcol
+\endcols
+
+
+## Binary Segmentation
+
+\begin{block}{}
+\small{
+\begin{description}
+\item[Input:] A set of data of the form, $(y_1,y_2,\hdots,y_n)$ where $y_i\in\RR$.\\
+A test statistic on the data $\Gamma(\cdot)$, \\
+An estimator of changepoint location $\hat{\tau}(\cdot)$,\\
+A rejection threshold $c$.
+\item[Initialise:] Let $\mathcal{CP}=\emptyset$ and $\mathcal{S}=\{[1,n]\}$;
+\item[Iterate:] while $\mathcal{S}\neq\emptyset$ do
+\begin{itemize}
+\item Choose an element of $\mathcal{S}$; denote this element as $[s,t]$;
+\item if $\Gamma(\mathbf{y}_{s:t})<c$ then
+\begin{itemize}
+\item remove $[s,t]$ from $\mathcal{S}$
+\end{itemize}
+\item if $\Gamma(\mathbf{y}_{s:t})\geq c$ then
+\begin{itemize}
+\item remove $[s,t]$ from $\mathcal{S}$;
+\item calculate $r=\hat{\tau}(\mathbf{y}_{s:t})+s-1$, and add $r$ to $\mathcal{CP}$;
+\item if $r \neq s$ add $[s,r]$ to $\mathcal{S}$;
+\item if $r \neq t-1$ add $[r+1,t]$ to $\mathcal{S}$;
+\end{itemize}
+\end{itemize}
+\item[Output:] The changepoints recorded in $\mathcal{CP}$.
+\end{description}}
+\end{block}
+
+## Binary Segmentation using "wbs"
+
+```{r}
+y <- y_mean
+tru_cps <- tru_cps_mean[-c(1,length(tru_cps_mean))]
+```
+
+\begincols
+  \begincol{.6\textwidth}
+\footnotesize
+Baranowski and Fryzlewicz (2015)
+\scriptsize
+\vspace{20pt}
+
+```{r,echo=TRUE}
+library(wbs)
+
+sbs(y) -> sbs.out
+s.cpt <- changepoints(sbs.out,th =4)
+
+s.cpt$cpt.th[[1]] %>% sort
+
+wbs(y,
+    M=5000) -> wbs.out
+
+w.cpt <- changepoints(wbs.out,th=4)
+
+w.cpt$cpt.th[[1]] %>% sort
+
+```
+  \endcol
+\begincol{.4\textwidth}
+```{r, fig.height=2,fig.width=3}
+ggplot(data.frame(t=1:n,y=y_mean),aes(x=t,y=y)) + geom_point(size=.5) +
+  geom_vline(data=data.frame(CP=tru_cps),aes(xintercept=CP),colour="red",linetype="dashed") +
+  theme_bw()+ggtitle("True")
+```
+
+```{r, fig.height=2,fig.width=3}
+ggplot(data.frame(t=1:n,y=y_mean),aes(x=t,y=y)) + geom_point(size=.5) +
+  geom_vline(data=data.frame(CP=s.cpt$cpt.th[[1]]),aes(xintercept=CP),colour="blue",linetype="dashed") +
+  theme_bw()+ggtitle("BS")
+```
+
+```{r, fig.height=2,fig.width=3}
+ggplot(data.frame(t=1:n,y=y_mean),aes(x=t,y=y)) + geom_point(size=.5) +
+  geom_vline(data=data.frame(CP=w.cpt$cpt.th[[1]]),aes(xintercept=CP),colour="blue",linetype="dashed") +
+  theme_bw()+ggtitle("WBS")
+```
+  \endcol
+\endcols
+
+
+## Cost function representation
+
+Most changepoint detection methods boil down to minimising the sum of some cost function, $\mathcal{C}(\cdot)$, over the segments.
+
+\[
+\min_{\tau_{1:m},m} \left[\sum_{j=0}^{m+1} \mathcal{C}(\mathbf{y}_{\tau_j+1:\tau_{j+1}})\right]
+\]
+This cost function could be a number of things:
+
+1. Negative log-likelihood,
+2. Negative posterior,
+3. Minimum Description Length.
+
+## Dynamic Programming Methods
+
+\begin{description}
+\item[Optimal Partitioning:] Optimisation based sum of optimal up to last changepoint and the cost between last changepoint and current time (plus a penalty to avoid over fitting).
+\begin{block}{}
+\setlength\abovedisplayskip{0pt}
+\begin{align*}
+F(\tau^*)=\min_{0\leq\tau<\tau^*}[F(\tau)+\mathcal{C}(\mathbf{y}_{(\tau+1):\tau^*})+\beta].
+\end{align*}
+\end{block}
+\item[Segment Neighbourhood Search:] Optimisation for $k$ segments based on optimal for $k-1$ segments plus cost for new segment.
+\begin{block}{}
+\setlength\abovedisplayskip{0pt}
+\begin{align*}
+q_{1,j}^k=\min_{v\in \{1,\hdots,j-1\}}[q_{1,v}^{k-1}+q_{v+1,j}^1].
+\end{align*}
+\end{block}
+\end{description}
+
+## The changepoint package
+
+- Functions for changepoint analysis.
+- Can use various changepoint detection methods:
+     * Binary Segmentation
+     * AMOC
+     * Segment Neighbourhood
+     * PELT (Optimal Partitioning)
+- With various choices of penalty function/value.
+- And either a Gaussian or CUSUM test statistic.
+- Three *headliner* functions:
+     * `cpt.mean`
+     * `cpt.var`
+     * `cpt.meanvar`
+- Authors: Rebecca Killick, Kaylea Haynes, Idris Eckley, Paul Fearnhead, Jamie Lee.
+
+## Change in mean using "changepoint"
+
+```{r}
+tru_cps <- tru_cps_mean[-c(1,length(tru_cps_mean))]
+```
+
+\begincols
+  \begincol{.6\textwidth}
+<!-- \footnotesize -->
+\scriptsize
+```{r,echo=TRUE}
+changepoint::cpt.mean(y_mean,
+                      penalty = "BIC",
+                      method = "PELT"
+                      ) -> cpt_object #S4
+
+cpt_object %>% changepoint::likelihood()
+cpt_object %>% changepoint::ncpts()
+cpt_object %>% changepoint::cpts() -> est_cps
+qpcR:::rbind.na(tru_cps,est_cps)
+```
+  \endcol
+\begincol{.4\textwidth}
+```{r, fig.height=3,fig.width=3}
+ggplot(data.frame(t=1:n,y=y_mean),aes(x=t,y=y)) + geom_point(size=.5) +
+  geom_vline(data=data.frame(CP=tru_cps),aes(xintercept=CP),colour="red",linetype="dashed") +
+  theme_bw()+ggtitle("True")
+```
+
+```{r, fig.height=3,fig.width=3}
+ggplot(data.frame(t=1:n,y=y_mean),aes(x=t,y=y)) + geom_point(size=.5) +
+  geom_vline(data=data.frame(CP=est_cps),aes(xintercept=CP),colour="blue",linetype="dashed") +
+  theme_bw()+ggtitle("Estimated")
+```
+
+  \endcol
+\endcols
+
+## Change in variance using "changepoint"
+
+```{r}
+tru_cps <- tru_cps_var[-c(1,length(tru_cps_var))]
+```
+
+
+\begincols
+  \begincol{.6\textwidth}
+<!-- \footnotesize -->
+\scriptsize
+```{r,echo=TRUE}
+changepoint::cpt.var(y_var,
+                     penalty = "BIC",
+                     method = "PELT"
+                     ) -> cpt_object #S4
+
+cpt_object %>% changepoint::likelihood()
+cpt_object %>% changepoint::ncpts()
+cpt_object %>% changepoint::cpts() -> est_cps
+qpcR:::rbind.na(tru_cps,est_cps)
+```
+  \endcol
+\begincol{.4\textwidth}
+```{r, fig.height=3,fig.width=3}
+ggplot(data.frame(t=1:n,y=y_var),aes(x=t,y=y)) + geom_point(size=.5) +
+  geom_vline(data=data.frame(CP=tru_cps),aes(xintercept=CP),colour="red",linetype="dashed") +
+  theme_bw()+ggtitle("True")
+```
+
+```{r, fig.height=3,fig.width=3}
+ggplot(data.frame(t=1:n,y=y_var),aes(x=t,y=y)) + geom_point(size=.5) +
+  geom_vline(data=data.frame(CP=est_cps),aes(xintercept=CP),colour="blue",linetype="dashed") +
+  theme_bw()+ggtitle("Estimated")
+```
+
+  \endcol
+\endcols
+
+## Penalty Choice
+
+\begin{description}
+\item[Optimal Partitioning:] Optimisation based sum of optimal up to last changepoint and the cost between last changepoint and current time (plus a penalty to avoid over fitting).
+\begin{block}{}
+\setlength\abovedisplayskip{0pt}
+\begin{align*}
+F(\tau^*)=\min_{0\leq\tau<\tau^*}[F(\tau)+\mathcal{C}(\mathbf{y}_{(\tau+1):\tau^*})+\beta].
+\end{align*}
+\end{block}
+\end{description}
+
+## Penalty Choice
+
+\begincols
+  \begincol{.5\textwidth}
+<!-- \footnotesize -->
+\scriptsize
+```{r}
+y<-y_mean
+tru_cps <- tru_cps_mean[-c(1,length(tru_cps_mean))]
+```
+
+
+```{r, fig.height=2,fig.width=3,results="hide"}
+cpt.mean(y,penalty = "CROPS",
+         pen.value=c(5,1000),
+         method="PELT",
+         class=FALSE) -> crops.out
+
+ggplot(data.frame(t=1:n,y=y),aes(x=t,y=y)) + geom_point(size=.5) +
+  geom_vline(data=data.frame(CP=tru_cps),aes(xintercept=CP),colour="red",linetype="dashed") +
+  theme_bw()+ggtitle("True")
+```
+
+```{r, fig.height=2,fig.width=3}
+ggplot(data.frame(t=1:n,y=y),aes(x=t,y=y)) + geom_point(size=.5) +
+  geom_vline(data=data.frame(CP=crops.out$changepoints[[6]]),aes(xintercept=CP),colour="blue",linetype="dashed") +
+  theme_bw()+ggtitle(paste0("beta=",round(crops.out$cpt.out[1,6],2)))
+```
+  \endcol
+\begincol{.5\textwidth}
+
+```{r, fig.height=2,fig.width=3}
+ggplot(data.frame(t=1:n,y=y),aes(x=t,y=y)) + geom_point(size=.5) +
+  geom_vline(data=data.frame(CP=crops.out$changepoints[[9]]),aes(xintercept=CP),colour="blue",linetype="dashed") +
+  theme_bw()+ggtitle(paste0("beta=",round(crops.out$cpt.out[1,9],2)))
+```
+
+```{r, fig.height=2,fig.width=3}
+ggplot(data.frame(t=1:n,y=y),aes(x=t,y=y)) + geom_point(size=.5) +
+  geom_vline(data=data.frame(CP=crops.out$changepoints[[1]]),aes(xintercept=CP),colour="blue",linetype="dashed") +
+  theme_bw()+ggtitle(paste0("beta=",crops.out$cpt.out[1,1]))
+```
+
+  \endcol
+\endcols
+
+## CROPS
+
+
+
+
+\begincols
+  \begincol{.6\textwidth}
+<!-- \footnotesize -->
+\scriptsize
+```{r}
+y<-y_mean
+```
+
+
+```{r, echo=TRUE,message=FALSE}
+cpt.mean(y,penalty = "CROPS",
+         pen.value=c(5,1000),
+         method="PELT",
+         class=FALSE) -> crops.out
+```
+  \endcol
+\begincol{.4\textwidth}
+```{r, fig.height=3,fig.width=3}
+crops.out$cpt.out %>% t() %>% as.data.frame() %>% ggplot(aes(numberofchangepoints,penalised_cost)) + geom_line() +geom_point() +theme_bw()
+```
+
+  \endcol
+\endcols
+
+\scriptsize
+```{r, echo=TRUE}
+crops.out$cpt.out %>% .[,1:5]
+```
+
+
+
+## Change in trend with Prophet
+
+
+\begincols
+  \begincol{.6\textwidth}
+<!-- \footnotesize -->
+\scriptsize
+
+```{r}
+y<-y_trend
+tru_cps <- tru_cps_trend
+```
+
+```{r,echo=TRUE, eval=FALSE}
+df <-data.frame(
+  ds=lubridate::as_date("16/10/18")+
+                        (1:length(y)),
+  y= y)
+
+m <- prophet(df)
+
+forecast <- predict(m)
+
+plot(m, forecast)+add_changepoints_to_plot(m)
+
+prophet_plot_components(m, forecast)
+```
+  \endcol
+\begincol{.4\textwidth}
+```{r, fig.height=3,fig.width=3}
+ggplot(data.frame(t=1:n,y=y_trend),aes(x=t,y=y)) + geom_point(size=.5) +
+  geom_vline(data=data.frame(CP=tru_cps),aes(xintercept=CP),colour="red",linetype="dashed") +
+  theme_bw()+ggtitle("True")
+```
+
+```{r,echo=FALSE, eval=TRUE,fig.height=3,fig.width=3,message=FALSE,warning=FALSE,results="hide"}
+df <-data.frame(ds=lubridate::as_date("16/10/18")+(1:length(y_trend)),y= y_trend)
+
+m <- prophet(df)
+
+forecast <- predict(m)
+
+plot(m, forecast)+add_changepoints_to_plot(m)
+```
+
+  \endcol
+\endcols
+
+## Peyton Manning (Prophet example)
+
+\begincols
+  \begincol{.6\textwidth}
+<!-- \footnotesize -->
+\scriptsize
+
+
+```{r,echo=TRUE, eval=FALSE}
+df<-read.csv(
+  "~/changepointsinR/
+  example_wp_log_peyton_manning.csv")
+m <- prophet(df)
+
+future <- make_future_dataframe(
+  m,
+  periods = 365)
+
+
+forecast <- predict(m, future)
+
+plot(m, forecast)+add_changepoints_to_plot(m)
+```
+  \endcol
+\begincol{.4\textwidth}
+
+```{r,echo=FALSE, eval=TRUE,fig.width=5,message=FALSE,warning=FALSE,results="hide"}
+df<-read.csv(
+"~/changepointsinR/example_wp_log_peyton_manning.csv"
+)
+m <- prophet(df)
+
+future <- make_future_dataframe(
+  m,
+  periods = 365)
+
+
+forecast <- predict(m, future)
+
+plot(m, forecast)+add_changepoints_to_plot(m)
+```
+
+  \endcol
+\endcols
+
+## Peyton Manning (Prophet example)
+
+```{r}
+plot(m, forecast)+add_changepoints_to_plot(m)
+```
+
+
+## Peyton Manning (Prophet example)
+
+\begincols
+  \begincol{.6\textwidth}
+<!-- \footnotesize -->
+\scriptsize
+
+
+```{r,echo=TRUE, eval=FALSE}
+prophet_plot_components(m, forecast)
+```
+  \endcol
+\begincol{.4\textwidth}
+
+```{r,echo=FALSE, eval=TRUE,fig.width=4,message=FALSE,warning=FALSE,results="hide"}
+prophet_plot_components(m, forecast)
+```
+
+  \endcol
+\endcols
+
+## Discussion
+
+- Many changepoint methods avaliable
+      * Not discussed; Multivariate, online changepoint detection, non parametric (`changepoint.np`,`ecp`) and more.
+      
+- `changepoint` and `wbs` packages are a good place to start.
+- Computational time can be a major issue in changepoint detection, meaning bespoke solutions can be best.
+- Code not always in the best form, but big forcasting packages such as prophet use changepoints too.
+      
+
